@@ -1,10 +1,12 @@
 # Time series
-import numpy as np 
+import numpy as np
 import xgboost as xgb
 import matplotlib.pyplot as plt
 import statistics as sts
 import datetime
 import math
+from sklearn.pipeline import Pipeline
+
 
 def mean_absolute_percentage_error(y_true, y_pred):
     """     
@@ -21,12 +23,13 @@ def mean_absolute_percentage_error(y_true, y_pred):
         the mean absolute percentage error
     """
     y_true, y_pred = np.array(y_true), np.array(y_pred)
-    
+
     try:
         mape = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
     except:
         mape = np.NaN
     return mape
+
 
 def method(X_train, X_test, Y_train, Y_test):
     """     
@@ -49,12 +52,17 @@ def method(X_train, X_test, Y_train, Y_test):
         the vector of predicted values of target variable of test-set
     """
     # Any other model from sklearn can be used
-    rs = xgb.XGBRegressor(max_depth=4, learning_rate=0.1, n_estimators=10, silent=True, objective='reg:linear', reg_lambda=1)
 
-    rs.fit(X_train,Y_train) 
+    rgr = xgb.XGBRegressor(max_depth=4, learning_rate=0.1, n_estimators=10, silent=True, objective='reg:linear',
+                           reg_lambda=1)
 
-    Yhat_train=rs.predict(X_train)
-    Yhat_test=rs.predict(X_test)
+    # If your regressor requires a scaler, add it to the pipe
+    pipe = Pipeline([('rgr', rgr)])
+
+    pipe.fit(X_train, Y_train)
+
+    Yhat_train = pipe.predict(X_train)
+    Yhat_test = pipe.predict(X_test)
 
     return Yhat_train, Yhat_test
 
@@ -80,23 +88,23 @@ def plot_learning_curves(X, Y, d, train_sizes, k):
     k : int
         number of tested days
     """
-    train_mape_curve, test_mape_curve = [],[]
-    tr_mape_std, ts_mape_std, tr_mape, ts_mape = [],[],[],[]
+    train_mape_curve, test_mape_curve = [], []
+    tr_mape_std, ts_mape_std, tr_mape, ts_mape = [], [], [], []
 
     # Learning curve procedure
-    for tr in train_sizes: # for each training-set size in the list
-        for i in range(k): # repeat the preocedure for k different days
-            
-            day_first = X.index[0] + datetime.timedelta(weeks=tr)
-            timedelta = ((X.index[-1] - day_first)/k).days
-            day_ts = day_first + datetime.timedelta(days=timedelta*i)
+    for tr in train_sizes:  # for each training-set size in the list
+        for i in range(k):  # repeat the preocedure for k different days
 
-            sp_tr = day_ts - datetime.timedelta(weeks=tr) # First index of training-set
-            ep_tr = day_ts  - datetime.timedelta(minutes=1) # Last index of training-set
-            sp_ts = day_ts # First index of test-set
+            day_first = X.index[0] + datetime.timedelta(weeks=tr)
+            timedelta = ((X.index[-1] - day_first) / k).days
+            day_ts = day_first + datetime.timedelta(days=timedelta * i)
+
+            sp_tr = day_ts - datetime.timedelta(weeks=tr)  # First index of training-set
+            ep_tr = day_ts - datetime.timedelta(minutes=1)  # Last index of training-set
+            sp_ts = day_ts  # First index of test-set
             # Last index of test-set: subtract one minute to not select the next day
-            ep_ts = day_ts + datetime.timedelta(days = d) - datetime.timedelta(minutes=1)
-            
+            ep_ts = day_ts + datetime.timedelta(days=d) - datetime.timedelta(minutes=1)
+
             if (ep_ts) > X.index[-1]:
                 break
 
@@ -125,7 +133,7 @@ def plot_learning_curves(X, Y, d, train_sizes, k):
         mean_mape_test = sts.mean(test_mape_curve)
         train_mape_std = np.std(train_mape_curve)
         test_mape_std = np.std(test_mape_curve)
-        train_mape_curve, test_mape_curve = [],[]
+        train_mape_curve, test_mape_curve = [], []
 
         tr_mape_std.append(train_mape_std)
         ts_mape_std.append(test_mape_std)
@@ -136,27 +144,24 @@ def plot_learning_curves(X, Y, d, train_sizes, k):
     train_mape_std = np.asarray(tr_mape_std)
     test_mape_mean = np.asarray(ts_mape)
     test_mape_std = np.asarray(ts_mape_std)
-    
 
     fig = plt.figure()
-    plt.rc('xtick',labelsize=28)
-    plt.rc('ytick',labelsize=28)
+    plt.rc('xtick', labelsize=28)
+    plt.rc('ytick', labelsize=28)
     plt.grid()
     plt.fill_between(train_sizes, train_mape_mean - train_mape_std,
-                        train_mape_mean + train_mape_std, alpha=0.1,
-                        color='r')
+                     train_mape_mean + train_mape_std, alpha=0.1,
+                     color='r')
     plt.fill_between(train_sizes, test_mape_mean - test_mape_std,
-                        test_mape_mean + test_mape_std, alpha=0.1, color='g')
+                     test_mape_mean + test_mape_std, alpha=0.1, color='g')
     plt.plot(train_sizes, train_mape_mean, 'o-', color='r', label='Training score')
     plt.plot(train_sizes, test_mape_mean, 'o-', color='g', label='Test score')
     plt.xticks(train_sizes)
-    plt.title( 'Learning Curves XGBoost' , fontsize=28)
+    plt.title('Learning Curves XGBoost', fontsize=28)
     plt.xlabel('Training-set size [weeks]', fontsize=28)
     plt.ylabel('MAPE [%]', fontsize=28)
     plt.legend(loc='best', fontsize=28)
     fig.set_size_inches(28.5, 10.5)
     fig.savefig('learning-curves-xgboost.png')
-
-
 
     return
